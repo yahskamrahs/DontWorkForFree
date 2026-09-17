@@ -16,6 +16,7 @@ class SettingsProvider extends ChangeNotifier {
   static const _overtimeIntervalKey = 'overtime_interval_minutes';
   static const _entertainmentModeEnabledKey = 'entertainment_mode_enabled';
   static const _entertainmentIntervalKey = 'entertainment_interval_minutes';
+  static const _jokeLanguageKey = 'joke_language';
 
   double _monthlySalary = 0;
   String _currencySymbol = '₹';
@@ -31,6 +32,7 @@ class SettingsProvider extends ChangeNotifier {
   int _overtimeIntervalMinutes = 15;
   bool _entertainmentModeEnabled = true;
   int _entertainmentIntervalMinutes = 15;
+  String _jokeLanguage = 'Mixed';
 
   double get monthlySalary => _monthlySalary;
   String get currencySymbol => _currencySymbol;
@@ -46,6 +48,7 @@ class SettingsProvider extends ChangeNotifier {
   int get overtimeIntervalMinutes => _overtimeIntervalMinutes;
   bool get entertainmentModeEnabled => _entertainmentModeEnabled;
   int get entertainmentIntervalMinutes => _entertainmentIntervalMinutes;
+  String get jokeLanguage => _jokeLanguage;
 
   int get currentMonthDays {
     final now = DateTime.now();
@@ -72,6 +75,7 @@ class SettingsProvider extends ChangeNotifier {
     _overtimeIntervalMinutes = p.getInt(_overtimeIntervalKey) ?? 15;
     _entertainmentModeEnabled = p.getBool(_entertainmentModeEnabledKey) ?? true;
     _entertainmentIntervalMinutes = p.getInt(_entertainmentIntervalKey) ?? 15;
+    _jokeLanguage = p.getString(_jokeLanguageKey) ?? 'Mixed';
     notifyListeners();
   }
 
@@ -146,7 +150,15 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setEntertainmentIntervalMinutes(int minutes) async {
     _entertainmentIntervalMinutes = minutes;
-    await (await SharedPreferences.getInstance()).setInt(_entertainmentIntervalKey, minutes);
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_entertainmentIntervalKey, minutes);
+    notifyListeners();
+  }
+
+  Future<void> setJokeLanguage(String lang) async {
+    _jokeLanguage = lang;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_jokeLanguageKey, lang);
     notifyListeners();
   }
 }

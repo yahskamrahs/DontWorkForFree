@@ -72,6 +72,18 @@ void main() async {
     await shiftProvider.initialize();
   } catch (_) {}
 
+  NotificationService.instance.onCustomAction = (action) {
+    if (action == 'ACTION_PAUSE') {
+      if (shiftProvider.isOnBreak) {
+        shiftProvider.endBreak();
+      } else {
+        shiftProvider.startBreak();
+      }
+    } else if (action == 'ACTION_CLOCK_OUT') {
+      shiftProvider.punchOut();
+    }
+  };
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -287,7 +299,10 @@ class _AppShellState extends State<_AppShell> {
       body: _screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        onDestinationSelected: (i) {
+          HapticFeedback.selectionClick();
+          setState(() => _currentIndex = i);
+        },
         height: 64,
         destinations: const [
           NavigationDestination(

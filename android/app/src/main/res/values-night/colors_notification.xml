@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Text colors -->
+    <color name="notif_text_title">#E5E7EB</color>
+    <color name="notif_text_subtitle">#8B96A5</color>
+
+    <!-- Status pill (transparent bg on dark) -->
+    <color name="notif_pill_bg">#1A2E3A</color>
+    <color name="notif_pill_text">#4CAF50</color>
+
+    <!-- Green dot -->
+    <color name="notif_dot">#4CAF50</color>
+
+    <!-- Timer ring -->
+    <color name="notif_progress_fill">#FFC107</color>
+
+    <!-- Pause button (dark with subtle border) -->
+    <color name="notif_btn_pause_bg">#1F2937</color>
+    <color name="notif_btn_pause_text">#D1D5DB</color>
+    <color name="notif_btn_pause_stroke">#374151</color>
+
+    <!-- Clock Out button (dark with subtle border) -->
+    <color name="notif_btn_clockout_bg">#1F2937</color>
+    <color name="notif_btn_clockout_text">#D1D5DB</color>
+    <color name="notif_btn_clockout_stroke">#374151</color>
+</resources>

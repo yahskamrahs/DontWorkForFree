@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/shift_record_model.dart';
 import '../providers/settings_provider.dart';
 import '../services/database_service.dart';
+import '../services/import_export_service.dart';
 import '../widgets/multi_date_picker_sheet.dart';
+import '../widgets/add_past_shift_dialog.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -72,6 +74,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _showAddMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F1625),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.history_rounded, color: Color(0xFF00BCD4)),
+                title: const Text('Add Past Shift', style: TextStyle(color: Colors.white)),
+                subtitle: const Text('Enter previous work hours manually', style: TextStyle(color: Color(0xFF5A6478), fontSize: 12)),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  final added = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => const AddPastShiftDialog(),
+                  );
+                  if (added == true) _load();
+                },
+              ),
+              const Divider(color: Color(0xFF1E2D47)),
+              ListTile(
+                leading: const Icon(Icons.event_busy_rounded, color: Color(0xFFFFB800)),
+                title: const Text('Add Leave', style: TextStyle(color: Colors.white)),
+                subtitle: const Text('Mark specific dates as leave', style: TextStyle(color: Color(0xFF5A6478), fontSize: 12)),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  final dates = await showMultiDatePickerSheet(context);
+                  if (dates != null && dates.isNotEmpty && mounted) {
+                    for (final date in dates) {
+                      final leaveRecord = ShiftRecordModel(
+                        date: ShiftRecordModel.dateKey(date),
+                        punchIn: date.toIso8601String(),
+                        punchOut: date.toIso8601String(),
+                        totalBreakSeconds: 0,
+                        scheduledDurationMinutes: 0,
+                        profileId: 'LEAVE',
+                        profileName: 'Leave Day',
+                      );
+                      await DatabaseService.instance.insertRecord(leaveRecord);
+                    }
+                    _load();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Group records by week label
   Map<String, List<ShiftRecordModel>> _grouped() {
     final result = <String, List<ShiftRecordModel>>{};
@@ -109,27 +169,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF080C18),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final dates = await showMultiDatePickerSheet(context);
-          if (dates != null && dates.isNotEmpty && mounted) {
-            for (final date in dates) {
-              final leaveRecord = ShiftRecordModel(
-                date: ShiftRecordModel.dateKey(date),
-                punchIn: date.toIso8601String(),
-                punchOut: date.toIso8601String(),
-                totalBreakSeconds: 0,
-                scheduledDurationMinutes: 0,
-                profileId: 'LEAVE',
-                profileName: 'Leave Day',
-              );
-              await DatabaseService.instance.insertRecord(leaveRecord);
-            }
-            _load();
-          }
-        },
+        onPressed: () => _showAddMenu(context),
         backgroundColor: const Color(0xFFFFB800),
-        icon: const Icon(Icons.event_busy_rounded, color: Color(0xFF080C18)),
-        label: const Text('Add Leave', style: TextStyle(color: Color(0xFF080C18), fontWeight: FontWeight.bold)),
+        icon: const Icon(Icons.add_rounded, color: Color(0xFF080C18)),
+        label: const Text('Add Entry', style: TextStyle(color: Color(0xFF080C18), fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
         child: Column(
@@ -148,6 +191,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ],
                   ),
                   const Spacer(),
+                  IconButton(
+                    onPressed: () async {
+                      await ImportExportService.instance.exportToExcel();
+                    },
+                    icon: const Icon(Icons.upload_file_rounded, color: Color(0xFF5A6478)),
+                    tooltip: 'Export to Excel',
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      final count = await ImportExportService.instance.importFromExcel();
+                      if (count > 0 && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Imported $count records')),
+                        );
+                        _load();
+                      }
+                    },
+                    icon: const Icon(Icons.download_rounded, color: Color(0xFF5A6478)),
+                    tooltip: 'Import from Excel',
+                  ),
                   if (_records.isNotEmpty)
                     IconButton(
                       onPressed: () => _clearAll(context),

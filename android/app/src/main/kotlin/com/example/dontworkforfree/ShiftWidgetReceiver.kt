@@ -1,4 +1,4 @@
-package com.example.my_app
+package com.example.dontworkforfree
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider

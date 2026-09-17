@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/custom_notification_model.dart';
 import '../models/shift_record_model.dart';
 import '../services/storage_service.dart';
@@ -7,7 +7,7 @@ import '../services/notification_service.dart';
 import '../services/database_service.dart';
 import '../services/widget_service.dart';
 
-class ShiftProvider extends ChangeNotifier {
+class ShiftProvider extends ChangeNotifier with WidgetsBindingObserver {
   // ── Profile-injected fields ─────────────────────────────────────────────────
   Duration _shiftDuration = const Duration(hours: 8, minutes: 30);
   String _profileId = 'standard';
@@ -122,6 +122,7 @@ class ShiftProvider extends ChangeNotifier {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+    WidgetsBinding.instance.addObserver(this);
 
     _customNotifications = await StorageService.loadCustomNotifications();
     final wasActive = await StorageService.loadIsActive();
@@ -146,7 +147,7 @@ class ShiftProvider extends ChangeNotifier {
         await _rescheduleNotifications();
         await _syncWidget();
         await NotificationService.instance
-            .showPersistentTimer(safeExitTime: safeExitTime);
+            .showPersistentTimer(safeExitTime: safeExitTime, shiftDuration: _shiftDuration, isOnBreak: _isOnBreak, breakStartTime: _breakStartTime);
       }
     }
 
@@ -183,7 +184,7 @@ class ShiftProvider extends ChangeNotifier {
     await _rescheduleNotifications();
     await _syncWidget();
     await NotificationService.instance
-        .showPersistentTimer(safeExitTime: safeExitTime);
+        .showPersistentTimer(safeExitTime: safeExitTime, shiftDuration: _shiftDuration, isOnBreak: _isOnBreak, breakStartTime: _breakStartTime);
     notifyListeners();
   }
 
@@ -244,7 +245,7 @@ class ShiftProvider extends ChangeNotifier {
     await _rescheduleNotifications();
     await _syncWidget();
     await NotificationService.instance
-        .showPersistentTimer(safeExitTime: safeExitTime);
+        .showPersistentTimer(safeExitTime: safeExitTime, shiftDuration: _shiftDuration, isOnBreak: _isOnBreak, breakStartTime: _breakStartTime);
     notifyListeners();
   }
 
@@ -253,6 +254,12 @@ class ShiftProvider extends ChangeNotifier {
     _isOnBreak = true;
     _breakStartTime = DateTime.now();
     await StorageService.saveBreakStart(_breakStartTime);
+    await NotificationService.instance.showPersistentTimer(
+      safeExitTime: safeExitTime,
+      shiftDuration: _shiftDuration,
+      isOnBreak: _isOnBreak,
+      breakStartTime: _breakStartTime,
+    );
     notifyListeners();
   }
 
@@ -264,6 +271,12 @@ class ShiftProvider extends ChangeNotifier {
     await StorageService.saveTotalBreakDuration(_totalBreakDuration);
     await StorageService.saveBreakStart(null);
     // No rescheduling — exit time is fixed, breaks don't affect it
+    await NotificationService.instance.showPersistentTimer(
+      safeExitTime: safeExitTime,
+      shiftDuration: _shiftDuration,
+      isOnBreak: _isOnBreak,
+      breakStartTime: _breakStartTime,
+    );
     notifyListeners();
   }
 
@@ -312,8 +325,13 @@ class ShiftProvider extends ChangeNotifier {
             .switchPersistentTimerToOvertime(safeExitTime: safeExitTime);
       }
 
-      // Update home widget once per minute
-      if (_tickCount % 60 == 0) _syncWidget();
+      // Update home widget and notification progress once per minute
+      if (_tickCount % 60 == 0) {
+        _syncWidget();
+        if (!_isShiftComplete) {
+          NotificationService.instance.showPersistentTimer(safeExitTime: safeExitTime, shiftDuration: _shiftDuration, isOnBreak: _isOnBreak, breakStartTime: _breakStartTime);
+        }
+      }
 
       notifyListeners();
     });
@@ -361,7 +379,19 @@ class ShiftProvider extends ChangeNotifier {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed || state == AppLifecycleState.paused) {
+      if (_isActive && !_isShiftComplete) {
+        NotificationService.instance.showPersistentTimer(safeExitTime: safeExitTime, shiftDuration: _shiftDuration, isOnBreak: _isOnBreak, breakStartTime: _breakStartTime);
+      } else if (_isActive && _isShiftComplete) {
+        NotificationService.instance.switchPersistentTimerToOvertime(safeExitTime: safeExitTime);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
   }

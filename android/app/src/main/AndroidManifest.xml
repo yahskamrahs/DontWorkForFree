@@ -58,7 +58,7 @@
 
         <!-- Home screen widget -->
         <receiver
-            android:name="com.example.my_app.ShiftWidgetReceiver"
+            android:name="com.example.dontworkforfree.ShiftWidgetReceiver"
             android:exported="true"
             android:label="Shift Timer Widget">
             <intent-filter>

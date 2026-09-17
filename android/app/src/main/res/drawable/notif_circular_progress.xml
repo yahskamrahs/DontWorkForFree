@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <!-- Exact thickness of 6dp for the background ring -->
+        <shape android:shape="ring" android:innerRadius="36dp" android:thickness="6dp" android:useLevel="false">
+            <solid android:color="#1AFFFFFF" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <!-- Start at top (270 deg) -->
+        <rotate android:fromDegrees="270" android:toDegrees="270">
+            <!-- Exact thickness of 6dp for the progress ring -->
+            <shape android:shape="ring" android:innerRadius="36dp" android:thickness="6dp" android:useLevel="true">
+                <solid android:color="@color/notif_progress_fill" />
+            </shape>
+        </rotate>
+    </item>
+</layer-list>

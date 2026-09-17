@@ -1,4 +1,5 @@
-import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -80,7 +81,7 @@ class NotificationService {
   static const _shiftChannel = 'shift_critical_v2';
   static const _reminderChannel = 'shift_reminders_v2';
   static const _sirenChannel = 'shift_critical_siren_2';
-  static const _persistentChannel = 'shift_timer_v1';
+  static const _persistentChannel = 'shift_timer_v2';
 
   // App icon shown as large icon on every notification
   static const _appIcon =
@@ -98,10 +99,22 @@ class NotificationService {
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
     await _createChannels();
+    _setupMethodChannel();
   }
 
-  static const _batteryChannel = MethodChannel('com.example.my_app/battery');
+  static const _batteryChannel = MethodChannel('com.example.dontworkforfree/battery');
+  static const _customChannel = MethodChannel('com.example.dontworkforfree/notifications');
 
+  Function(String)? onCustomAction;
+
+  void _setupMethodChannel() {
+    _customChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onNotificationAction') {
+        final action = call.arguments as String;
+        onCustomAction?.call(action);
+      }
+    });
+  }
   Future<void> requestPermission() async {
     final android = _plugin
         .resolvePlatformSpecificImplementation<
@@ -162,7 +175,7 @@ class NotificationService {
       _persistentChannel,
       'Live Shift Timer',
       description: 'Silent, persistent notification showing your live shift countdown — visible on the lock screen, like a screen-recording timer.',
-      importance: Importance.low,
+      importance: Importance.defaultImportance,
       playSound: false,
       enableVibration: false,
       showBadge: false,
@@ -179,13 +192,21 @@ class NotificationService {
   /// Shows/refreshes the live shift-timer notification. Counts down to
   /// [safeExitTime] while on the clock, or counts up from it once overtime
   /// has started.
-  Future<void> showPersistentTimer({required DateTime safeExitTime}) async {
+  Future<void> showPersistentTimer({
+    required DateTime safeExitTime,
+    Duration? shiftDuration,
+    bool isOnBreak = false,
+    DateTime? breakStartTime,
+  }) async {
     final isOvertime = DateTime.now().isAfter(safeExitTime);
     await _postPersistentTimer(
       anchor: safeExitTime,
       countDown: !isOvertime,
       title: isOvertime ? '🔴 Working overtime' : '🟢 Shift in progress',
       body: isOvertime ? 'Unpaid time elapsed' : 'Time left until safe exit',
+      shiftDuration: shiftDuration,
+      isOnBreak: isOnBreak,
+      breakStartTime: breakStartTime,
     );
   }
 
@@ -198,6 +219,7 @@ class NotificationService {
         countDown: false,
         title: '🔴 Working overtime',
         body: 'Unpaid time elapsed',
+        shiftDuration: null,
       );
 
   Future<void> _postPersistentTimer({
@@ -205,12 +227,46 @@ class NotificationService {
     required bool countDown,
     required String title,
     required String body,
+    Duration? shiftDuration,
+    bool isOnBreak = false,
+    DateTime? breakStartTime,
   }) async {
+    int progressPercent = countDown ? 100 : 100;
+    if (countDown && shiftDuration != null && shiftDuration.inSeconds > 0) {
+      final now = DateTime.now();
+      final remaining = anchor.difference(now).inSeconds;
+      progressPercent = ((remaining / shiftDuration.inSeconds) * 100).clamp(0, 100).toInt();
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        await _customChannel.invokeMethod('showActiveShiftNotification', {
+          'isOvertime': !countDown,
+          'anchorEpochMillis': anchor.millisecondsSinceEpoch,
+          'progressPercent': progressPercent,
+          'isOnBreak': isOnBreak,
+          'breakStartEpochMillis': breakStartTime?.millisecondsSinceEpoch ?? 0,
+        });
+        return; // Custom notification shown — don't show standard
+      } catch (e) {
+        debugPrint('Custom notification failed, falling back to standard: $e');
+      }
+    }
+    // Fallback: standard notification (non-Android, or custom failed)
+    await _postStandardTimer(anchor, countDown, title, body);
+  }
+
+  Future<void> _postStandardTimer(
+    DateTime anchor,
+    bool countDown,
+    String title,
+    String body,
+  ) async {
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
         _persistentChannel,
         'Live Shift Timer',
-        importance: Importance.low,
+        importance: Importance.defaultImportance,
         priority: Priority.low,
         playSound: false,
         enableVibration: false,
@@ -228,7 +284,16 @@ class NotificationService {
     await _plugin.show(_persistentTimerId, title, body, details);
   }
 
-  Future<void> cancelPersistentTimer() => _plugin.cancel(_persistentTimerId);
+  Future<void> cancelPersistentTimer() async {
+    if (Platform.isAndroid) {
+      try {
+        await _customChannel.invokeMethod('cancelActiveShiftNotification');
+      } catch (e) {
+        // Ignore
+      }
+    }
+    await _plugin.cancel(_persistentTimerId);
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // MASTER SCHEDULER
@@ -294,7 +359,7 @@ class NotificationService {
           final remaining = safeExitTime.difference(at);
           final hoursLeft = remaining.inHours;
           final minsLeft = remaining.inMinutes % 60;
-          final timeStr = hoursLeft > 0 ? '$hoursLeft hr ${minsLeft} min' : '$minsLeft min';
+          final timeStr = hoursLeft > 0 ? '$hoursLeft hr $minsLeft min' : '$minsLeft min';
           
           await _fire(
             id: _twoHourId + i,

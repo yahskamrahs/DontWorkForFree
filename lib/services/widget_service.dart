@@ -2,7 +2,7 @@ import 'package:home_widget/home_widget.dart';
 
 class WidgetService {
   static const _androidName = 'ShiftWidgetReceiver';
-  static const _qualifiedName = 'com.example.my_app.ShiftWidgetReceiver';
+  static const _qualifiedName = 'com.example.dontworkforfree.ShiftWidgetReceiver';
 
   static Future<void> update({
     required bool isActive,

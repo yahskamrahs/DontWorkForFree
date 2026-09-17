@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:screenshot/screenshot.dart';
@@ -199,40 +200,8 @@ class _PunchInView extends StatelessWidget {
           const SizedBox(height: 16),
           const _MonthlyRecoveryTracker(),
           const SizedBox(height: 52),
-          GestureDetector(
-            onTap: () => onPunchIn(),
-            child: Container(
-              width: 190,
-              height: 190,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const RadialGradient(
-                  colors: [Color(0xFFFFD54F), Color(0xFFFFB800)],
-                  radius: 0.7,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFB800).withValues(alpha: 0.4),
-                    blurRadius: 40,
-                    spreadRadius: 4,
-                  ),
-                ],
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.fingerprint_rounded,
-                      size: 58, color: Color(0xFF080C18)),
-                  SizedBox(height: 8),
-                  Text('PUNCH IN',
-                      style: TextStyle(
-                          color: Color(0xFF080C18),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2.5)),
-                ],
-              ),
-            ),
+          _HoldToPunchButton(
+            onPunchIn: () => onPunchIn(),
           ),
           const SizedBox(height: 36),
           TextButton.icon(
@@ -732,6 +701,166 @@ class _MonthlyRecoveryTrackerState extends State<_MonthlyRecoveryTracker> {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HoldToPunchButton extends StatefulWidget {
+  final Future<void> Function() onPunchIn;
+  const _HoldToPunchButton({required this.onPunchIn});
+
+  @override
+  State<_HoldToPunchButton> createState() => _HoldToPunchButtonState();
+}
+
+class _HoldToPunchButtonState extends State<_HoldToPunchButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  bool _isFinished = false;
+
+  // Track last haptic tick to avoid over-vibrating
+  double _lastHapticProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      // Slightly faster for snappier feel
+      duration: const Duration(milliseconds: 400),
+    );
+
+    // Subtle haptic ticks as progress fills
+    _controller.addListener(() {
+      if (_isFinished) return;
+      final val = _controller.value;
+      // Tick at every 25% for a subtle "click-click-click-done" feel
+      if (val >= 0.25 && _lastHapticProgress < 0.25) {
+        HapticFeedback.selectionClick();
+        _lastHapticProgress = 0.25;
+      } else if (val >= 0.50 && _lastHapticProgress < 0.50) {
+        HapticFeedback.selectionClick();
+        _lastHapticProgress = 0.50;
+      } else if (val >= 0.75 && _lastHapticProgress < 0.75) {
+        HapticFeedback.selectionClick();
+        _lastHapticProgress = 0.75;
+      }
+    });
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (!_isFinished) {
+          _isFinished = true;
+          // Satisfying completion haptic: medium impact feels polished, not jarring
+          HapticFeedback.mediumImpact();
+          // Fire punch-in immediately — no delay
+          widget.onPunchIn();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    if (_isFinished) return;
+    _lastHapticProgress = 0.0;
+    // Gentle initial tap feedback
+    HapticFeedback.selectionClick();
+    _controller.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    if (_isFinished) return;
+    _lastHapticProgress = 0.0;
+    _controller.reverse();
+  }
+
+  void _onTapCancel() {
+    if (_isFinished) return;
+    _lastHapticProgress = 0.0;
+    _controller.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Use a curved animation for a natural, smooth feel
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: curved,
+        builder: (context, child) {
+          // Smooth scale: starts at 1.0, gently zooms to 1.06
+          final scale = 1.0 + (curved.value * 0.06);
+          return Transform.scale(
+            scale: scale,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Base Button
+                Container(
+                  width: 190,
+                  height: 190,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      colors: [Color(0xFFFFD54F), Color(0xFFFFB800)],
+                      radius: 0.7,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFB800)
+                            .withValues(alpha: 0.3 + (curved.value * 0.25)),
+                        blurRadius: 40 + (curved.value * 20),
+                        spreadRadius: 4 + (curved.value * 8),
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.fingerprint_rounded,
+                          size: 58, color: Color(0xFF080C18)),
+                      SizedBox(height: 8),
+                      Text('PUNCH IN',
+                          style: TextStyle(
+                              color: Color(0xFF080C18),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2.5)),
+                    ],
+                  ),
+                ),
+                // Progress Bar Border — smooth white ring
+                if (curved.value > 0.0)
+                  SizedBox(
+                    width: 200,
+                    height: 200,
+                    child: CircularProgressIndicator(
+                      value: curved.value,
+                      strokeWidth: 3.5,
+                      strokeCap: StrokeCap.round,
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                      backgroundColor: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

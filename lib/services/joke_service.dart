@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class JokeService {
   static const String _url =
-      'https://v2.jokeapi.dev/joke/Programming,Pun,Miscellaneous?type=single&amount=10&safe-mode';
+      'https://v2.jokeapi.dev/joke/Programming?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&amount=10';
   static const String _usedJokesKey = 'used_local_jokes';
 
   /// Fetches fresh English jokes from the web, mixes them with unused 
@@ -14,85 +14,89 @@ class JokeService {
   static Future<List<String>> fetchJokes({int count = 10}) async {
     final List<String> jokesToReturn = [];
 
-    // 1. Fetch fresh web jokes (Infinite variety)
-    try {
-      final response = await http.get(Uri.parse(_url)).timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['error'] == false) {
-          if (data['jokes'] != null) {
-            final List<dynamic> jokesData = data['jokes'];
-            jokesToReturn.addAll(jokesData.map((j) => j['joke'].toString()));
-          } else if (data['joke'] != null) {
-            jokesToReturn.add(data['joke'].toString());
+    final prefs = await SharedPreferences.getInstance();
+    final jokeLanguage = prefs.getString('joke_language') ?? 'Mixed';
+
+    // 1. Fetch fresh web jokes (English)
+    if (jokeLanguage == 'English' || jokeLanguage == 'Mixed') {
+      try {
+        final response = await http.get(Uri.parse(_url)).timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['error'] == false) {
+            if (data['jokes'] != null) {
+              final List<dynamic> jokesData = data['jokes'];
+              for (var j in jokesData) {
+                if (j['type'] == 'single') {
+                  jokesToReturn.add(j['joke'].toString());
+                } else if (j['type'] == 'twopart') {
+                  jokesToReturn.add('${j['setup']}\n\n${j['delivery']}');
+                }
+              }
+            } else {
+              if (data['type'] == 'single') {
+                jokesToReturn.add(data['joke'].toString());
+              } else if (data['type'] == 'twopart') {
+                jokesToReturn.add('${data['setup']}\n\n${data['delivery']}');
+              }
+            }
           }
         }
-      }
-    } catch (_) {
-      // Ignore API failure
-    }
-
-    // 2. Massive list of local relatable/trending Indian jokes
-    final List<String> localJokes = [
-      "HR: 'We are like a family here.'\nMe: 'Toh property mein hissa milega?'",
-      "Manager: 'Why is this task delayed?'\nMe: 'Sir, work in progress sounds better than I forgot.'",
-      "Salary credit message is the only 'I love you' an employee actually wants to hear.",
-      "Client: 'I want it cheap, fast, and good.'\nMe: 'Pick two, aur teesre ka sapna chhod do.'",
-      "Friday evening 5:59 PM...\nManager: 'Ek chota sa change hai...'\nMe: 🏃‍♂️💨",
-      "Manager: 'Kaam kiti zala?'\nMe: 'Zala ki saheb... fkt suru karaycha baki ahe!'",
-      "Pagar zalyawar 2 divas Ambani, baki 28 divas fakir. Hech tr ahe IT life!",
-      "Client: 'He final ahe.'\nMe: 'Ho, tumchya pudhchya change paryant final ahe.'",
-      "Friday sandhyakali manager cha msg ala ki vatat: Aata kai navin sankat aaloy?",
-      "Code fatla ki devla devla karaycha, aani chalayla lagla ki 'I am the genius' mhanaycha.",
-      "Me trying to save money.\nMy brain: Zomato pe discount hai bhai, aaj kha le.",
-      "Friend: 'Weekend plan kay ahe?'\nMe: 'Zhop, khana, parat zhop.'",
-      "Mumbai locals on Monday mornings are more crowded than my list of pending tasks.",
-      "Me looking at my bank balance in the middle of the month: 'Yeh kahan aa gaye hum?'",
-      "HR: 'Appraisal will be fair.'\nMe: 'Ha, aur Punit Superstar normal insan hai.'",
-      "Auto walo ka attitude meri salary se bhi zyada high hai aaj kal.",
-      "When someone says 'we need to talk'. My heart beat: 📈📈📈",
-      "Manager: 'We need out of the box thinking.'\nMe: 'Sir, pehle box se bahar nikalne ka time toh do.'",
-      "Pune traffic madhe signal var thambne mhanje eka janamchi tapascharya.",
-      "Waking up at 7 AM feels like a punishment for a crime I didn't commit.",
-      "My diet plan: I will start from Monday. (Repeat every Sunday night).",
-      "Instagram reels banate waqt log bhool jate hai ki woh sadak pe khade hai.",
-      "Logon ke paas iPhone 15 aa gaya, aur main abhi bhi apne phate hue charger pe tape laga raha hu.",
-      "Every time my manager calls me randomly, I quickly open VS Code to look busy.",
-      "Relatives: 'Beta aage ka kya socha hai?'\nMe: 'Bhook lagi hai, pehle khaana kha lu?'",
-      "Meeting at 9 AM should be officially declared as a human rights violation.",
-      "Boss: 'Consider me your friend.'\nAlso Boss: 'Yeh report 5 baje tak chahiye.'",
-      "Me: 'I need a vacation.'\nBank Account: 'You need a glass of water, chup chap baith.'",
-      "Chai is not just a drink in India, it's a solution to 99% of our problems.",
-      "When the Wi-Fi stops working, I suddenly realize how lonely my life is.",
-      "Dost: 'Bhai Goa chalte hai.'\nGoa plan: Cancelled since 2018.",
-      "My only toxic trait is calculating how many hours of sleep I'll get if I sleep *right now*.",
-      "Job lagne ke baad pata chala ki bachpan hi acha tha.",
-      "That mini heart attack when you send a message to the wrong WhatsApp group.",
-      "Corporate lingo translated:\n'Let's circle back' = 'I forgot what we were talking about'.",
-      "Office AC is always set to 'Winter in Antarctica' mode.",
-      "Me leaving work at exactly 5:00 PM: 🥷 stealth mode activated.",
-      "When you fix a bug but 3 new bugs appear: 'Hum do, hamare do.'",
-      "Told my mom I have a headache. She said it's because of my phone.",
-      "Aai: 'Jevla ka?' The most powerful words in the world."
-    ];
-
-    // 3. Track used local jokes to prevent repetition
-    final prefs = await SharedPreferences.getInstance();
-    final usedIndexesStr = prefs.getStringList(_usedJokesKey) ?? [];
-    final Set<int> usedIndexes = usedIndexesStr.map((e) => int.parse(e)).toSet();
-
-    // Find which local jokes are still unused
-    final List<int> unusedIndexes = [];
-    for (int i = 0; i < localJokes.length; i++) {
-      if (!usedIndexes.contains(i)) {
-        unusedIndexes.add(i);
+      } catch (_) {
+        // Ignore API failure
       }
     }
 
-    // 4. If we have unused local jokes, pick some (e.g. up to 5)
-    if (unusedIndexes.isNotEmpty) {
+    // 2. Massive list of local relatable Hindi jokes (Devanagari)
+    if (jokeLanguage == 'Hindi' || jokeLanguage == 'Mixed') {
+      final List<String> localJokes = [
+        "टीचर: 'होमवर्क क्यों नहीं किया?'\nस्टूडेंट: 'मैम, मैं हॉस्टल में रहता हूँ।'\nटीचर: 'तो?'\nस्टूडेंट: 'हॉस्टल में तो हॉस्टल वर्क करना चाहिए ना!'",
+        "पत्नी: 'सुनो जी, जब हमारी नई-नई शादी हुई थी, तब तो आप मुझे बहुत प्यार करते थे, अब क्या हो गया?'\nपति: 'अरे पगली, चुनाव खत्म होने के बाद कौन प्रचार करता है!'",
+        "बॉस: 'तुम ऑफिस में सो क्यों रहे हो?'\nकर्मचारी: 'सर, मैं सो नहीं रहा हूँ, बल्कि आंखें बंद करके कंपनी के बड़े लक्ष्यों के बारे में सोच रहा हूँ।'",
+        "लड़का: 'मुझे तुमसे प्यार है।'\nलड़की: 'लेकिन मेरे पास तो बॉयफ्रेंड है।'\nलड़का: 'कोई बात नहीं, मुझे भी कौन सा शादी करनी है, मुझे तो बस टाइम पास करना है।'",
+        "डॉक्टर: 'आपका वजन कम करना बहुत जरूरी है।'\nमरीज: 'ठीक है डॉक्टर साहब, मैं कल से रोज 10 किलोमीटर चलूंगा।'\nएक हफ्ते बाद... मरीज: 'डॉक्टर साहब, मैं तो 70 किलोमीटर दूर आ गया, अब वापस कैसे जाऊं?'",
+        "भिखारी: 'भगवान के नाम पर कुछ दे दे बाबा।'\nआदमी: 'ये लो, मेरी पत्नी को ले जाओ।'\nभिखारी: 'अरे बाबा, मैंने कुछ देने को कहा था, मेरी जिंदगी बर्बाद करने को नहीं!'",
+        "बेटा: 'पापा, मुझे बुलेट चाहिए।'\nपापा: 'पड़ोस वाले शर्मा जी की लड़की को देख, वो बस से जाती है।'\nबेटा: 'वही तो नहीं देखी जाती पापा!'",
+        "पति: 'आज खाने में क्या बनाया है?'\nपत्नी: 'जो तुम कहो।'\nपति: 'दाल मखनी बना लो।'\nपत्नी: 'वो तो कल बनाई थी।'\nपति: 'तो फिर मटर पनीर बना लो।'\nपत्नी: 'वो तो मुझे पसंद नहीं।'\nपति: 'तो फिर जो मर्जी हो बना लो!'\nपत्नी: 'वही तो पूछ रही हूँ, क्या बनाऊँ?'",
+        "एक मच्छर परेशान बैठा था।\nदूसरे ने पूछा: 'क्या हुआ?'\nपहला: 'यार, गजब हो रहा है। चूहेदानी में चूहा, छिपकलीदानी में छिपकली... लेकिन मच्छरदानी में इंसान सो रहा है!'",
+        "टीचर: 'बताओ, दुनिया में सबसे पुरानी चीज क्या है?'\nस्टूडेंट: 'सर, गुस्सा!'\nटीचर: 'कैसे?'\nस्टूडेंट: 'जब से इंसान पैदा हुआ है, तब से ही नाक पर रखा है!'",
+        "पत्नी: 'अजी सुनते हो, मेरी नई सहेली आई है, मैं उससे मिलने जा रही हूँ।'\nपति: 'ठीक है, जाओ।'\nपत्नी: 'अरे, आप मुझे रोकेंगे नहीं?'\nपति: 'मैं कौन होता हूँ रोकने वाला? जो अपनी मर्जी से आई है, वो अपनी मर्जी से जाएगी!'",
+        "लड़की (बॉयफ्रेंड से): 'जानू, तुम मुझे कितना प्यार करते हो?'\nबॉयफ्रेंड: 'जितना तुम मुझे करती हो।'\nलड़की: 'हाय राम! इसका मतलब तुम भी मेरे साथ टाइम पास कर रहे हो!'",
+        "बेटा: 'पापा, आज मुझे एक लड़की ने किस किया!'\nपापा: 'वाह बेटा! क्या बात है!'\nबेटा: 'हाँ पापा, उसने कहा कि तुम बिल्कुल अपने पापा जैसे दिखते हो!'",
+        "मास्टर जी: 'बच्चों, बताओ, अगर पृथ्वी गोल है, तो हम गिरते क्यों नहीं?'\nपप्पू: 'सर, क्योंकि हम अंदर की तरफ हैं!'\nमास्टर जी: 'अरे बेवकूफ, अंदर कैसे?'\nपप्पू: 'सर, अगर बाहर होते तो हमें दिखाई नहीं देता कि पृथ्वी गोल है!'",
+        "संता: 'यार बंता, मेरी बीवी बहुत खर्चीली है।'\nबंता: 'क्यों, क्या हुआ?'\nसंता: 'कल कहने लगी कि मुझे सोने की चेन चाहिए।'\nबंता: 'तो तूने क्या किया?'\nसंता: 'मैंने उसे लोहे की चेन दे दी और कहा कि सोने के लिए यही काफी है!'",
+        "डॉक्टर: 'तुम्हारी एक किडनी फेल हो गई है।'\nमरीज: 'डॉक्टर साहब, दूसरी का रिजल्ट कब आएगा?'",
+        "टीचर: 'बच्चों, बताओ, 'I love you' का आविष्कार किसने किया?'\nस्टूडेंट: 'सर, चीन ने!'\nटीचर: 'कैसे?'\nस्टूडेंट: 'क्योंकि इसमें कोई गारंटी नहीं होती, चले तो चाँद तक, नहीं तो शाम तक!'",
+        "पत्नी: 'सुनो जी, मैं सोच रही हूँ कि मैं भी नौकरी कर लूँ।'\nपति: 'ठीक है, कर लो।'\nपत्नी: 'तो फिर घर का काम कौन करेगा?'\nपति: 'तुम ही करोगी, क्योंकि नौकरी तो तुम सिर्फ 8 घंटे करोगी ना!'",
+        "लड़का: 'मुझे ऐसी लड़की चाहिए जो मुझे समझ सके।'\nदोस्त: 'भाई, अगर वो तुझे समझ गई, तो वो तुझे कभी नहीं चुनेगी!'",
+        "बॉस: 'तुम हमेशा लेट क्यों आते हो?'\nकर्मचारी: 'सर, मैं हमेशा लेट नहीं आता, बस आप हमेशा जल्दी आ जाते हैं!'",
+        "टीचर: 'एक वाक्य बनाओ जिसमें 'शायद' और 'ज़रूर' दोनों हों।'\nछात्र: 'शायद आज बारिश ज़रूर होगी!'",
+        "पत्नी: 'अगर मैं मर गई तो तुम क्या करोगे?'\nपति: 'मैं भी मर जाऊँगा!'\nपत्नी: 'क्यों?'\nपति: 'क्योंकि इतनी खुशी मैं बर्दाश्त नहीं कर पाऊँगा!'"
+      ];
+
+      // 3. Track used local jokes to prevent repetition
+      final usedIndexesStr = prefs.getStringList(_usedJokesKey) ?? [];
+      final Set<int> usedIndexes = usedIndexesStr.map((e) => int.parse(e)).toSet();
+
+      // Find which local jokes are still unused
+      final List<int> unusedIndexes = [];
+      for (int i = 0; i < localJokes.length; i++) {
+        if (!usedIndexes.contains(i)) {
+          unusedIndexes.add(i);
+        }
+      }
+
+      // If we ran out of local jokes, clear the used list to start over
+      if (unusedIndexes.isEmpty) {
+        usedIndexes.clear();
+        for (int i = 0; i < localJokes.length; i++) {
+          unusedIndexes.add(i);
+        }
+      }
+
+      // 4. Pick some local jokes
       unusedIndexes.shuffle(Random());
-      final pickCount = min(5, unusedIndexes.length);
+      final pickCount = min(jokeLanguage == 'Hindi' ? count : 5, unusedIndexes.length);
       final picked = unusedIndexes.take(pickCount).toList();
 
       for (var idx in picked) {

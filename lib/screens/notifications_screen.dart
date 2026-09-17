@@ -217,11 +217,22 @@ class NotificationsScreen extends StatelessWidget {
               isEnabled: s.entertainmentModeEnabled,
               onToggle: s.setEntertainmentModeEnabled,
               trailing: s.entertainmentModeEnabled
-                  ? _SimpleIntervalPicker(
-                      value: s.entertainmentIntervalMinutes,
-                      color: const Color(0xFF00BCD4),
-                      suffix: ' mins during shift',
-                      onChanged: s.setEntertainmentIntervalMinutes,
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SimpleIntervalPicker(
+                          value: s.entertainmentIntervalMinutes,
+                          color: const Color(0xFF00BCD4),
+                          suffix: ' mins during shift',
+                          onChanged: s.setEntertainmentIntervalMinutes,
+                        ),
+                        const SizedBox(height: 8),
+                        _LanguagePicker(
+                          value: s.jokeLanguage,
+                          color: const Color(0xFF00BCD4),
+                          onChanged: s.setJokeLanguage,
+                        ),
+                      ],
                     )
                   : null,
             ),
@@ -582,7 +593,7 @@ class _SimpleIntervalPicker extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const _options = [1, 15, 30, 45, 60, 90, 120];
+  static const _options = [1, 5, 15, 30, 45, 60, 90, 120];
 
   @override
   Widget build(BuildContext context) {
@@ -618,6 +629,59 @@ class _SimpleIntervalPicker extends StatelessWidget {
         ),
         Text(suffix,
             style: const TextStyle(color: Color(0xFF8A97B0), fontSize: 12)),
+      ],
+    );
+  }
+}
+
+class _LanguagePicker extends StatelessWidget {
+  final String value;
+  final Color color;
+  final Future<void> Function(String) onChanged;
+
+  const _LanguagePicker({
+    required this.value,
+    required this.color,
+    required this.onChanged,
+  });
+
+  static const _options = ['English', 'Hindi', 'Mixed'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Text('Language ',
+            style: TextStyle(color: Color(0xFF8A97B0), fontSize: 12)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.4)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _options.contains(value) ? value : 'Mixed',
+              dropdownColor: const Color(0xFF162035),
+              isDense: true,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+              items: _options
+                  .map((e) => DropdownMenuItem(
+                        value: e,
+                        child: Text(e),
+                      ))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) onChanged(val);
+              },
+            ),
+          ),
+        ),
       ],
     );
   }
